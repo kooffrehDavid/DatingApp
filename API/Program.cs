@@ -1,13 +1,11 @@
-using System;
-using System.Collections.Immutable;
+
+
+using API.Extensions;
+using API.Middleware;
 using API.Data;
 using Microsoft.EntityFrameworkCore;
-using API.Interfaces;
-using API.Services;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
-using API.Extensions;
+
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,18 +23,33 @@ builder.Services.AddCors();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
+app.UseMiddleware<ExceptionMiddleware>();
 
 
 app.UseCors(builder => builder.AllowAnyHeader().AllowAnyMethod().WithOrigins("https://localhost:4200"));
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+var scope = app.Services.CreateScope();
+var services = scope.ServiceProvider;
+try
+{
+    var context = services.GetRequiredService<DataContext>();
+    await context.Database.MigrateAsync();
+    await Seed.SeedUsers(context);
+}
+catch (Exception ex)
+{
 
+    var logger = services.GetService<Logger<Program>>();
+    logger.LogError(ex, "an error occured during data seeding");
+}
 app.Run();
